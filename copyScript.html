@@ -1,0 +1,204 @@
+<!--注意:代码模板中的代码将会被复制到任何新创建的文件中，编辑代码模板中的代码，让他帮你自动增加固定代码吧-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>球星卡包抽奖</title>
+    <style>
+        .container {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 10px;
+            margin: 20px auto;
+            width: 340px;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background-color: #fff;
+            transition: all 0.3s;
+        }
+        .cell.disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .cell.prob-up { background-color: #FFD700; }
+        .cell.ability-up { background-color: #90EE90; }
+        .cell.tear { background-color: #FF6347; }
+        .status {
+            text-align: center;
+            margin: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="status">
+        <p>当前能力值：<span id="ability">96</span></p>
+        <p>当前概率：<span id="probability">5%</span></p>
+        <p>已抽次数：<span id="draw-count">0</span></p>
+        <button onclick="resetGame()">重置游戏</button>
+    </div>
+    <div class="container" id="grid"></div>
+
+    <script>
+        const cardPool = {
+            101: ['双增能卡纳瓦罗', '双增能埃托奥'],
+            100: ["双增能坎通纳", "双增能德科", "单增能克鲁伊夫", "双增能图拉姆", 
+                 "双增能19岁梅西", "单增能世界杯梅西", "双增能菲戈", "双增能范巴斯滕",
+                 "单增能普拉蒂尼", "双增能卡洛斯", "双增能罗纳尔迪尼奥", "单增能济科","双增能迪达", /* 其他100分球员 */],
+            99: ["双增能费雷尔", "单增能皮耶罗", "单增能皮尔洛", "单增能舍甫琴科",
+                "单增能马克莱莱", "单增能贝克汉姆", "单增能托蒂","单增能比利亚","单增能博格坎普","单增能德罗巴","单增能贝尔","单增能兰帕德","单增能里贝里","单增能贝隆","单增能鲁梅尼格","单增能卡恩","单增能马尔蒂尼","单增能维埃拉","单增能内德维德","单增能舒梅切尔","单增能切赫","单增能巴乔","双增能赫内斯",/* 其他99分球员 */],
+            98: ["双增能博扬", "单增能因扎吉", "单增能巴蒂斯图塔", "单增能古蒂","单增能伊涅斯塔","单增能阿尔贝蒂尼","单增能西多夫","单增能马克莱莱","单增能弗兰","单增能戴维斯","单增能埃德米尔森","单增能托雷斯","单增能卡卡","单增能劳尔", /* 其他98分球员 */],
+            97: ["单增能科斯塔库塔","单增能贝莱蒂","单增能利扎拉祖","单增能罗布森","单增能皮萨罗","单增能范比滕","单增能弗莱彻","单增能西曼","单增能埃尔文","单增能德尼尔森","单增能斯托伊科维奇","单增能约克","单增能埃德米尔森","单增能佩蒂特","单增能莫伦特斯","双增能切尔西托雷斯","单增能永贝里","单增能扬科勒","单增能萨维奥拉","单增能迪克森","单增能安布罗西尼","单增能桑托斯内马尔","单增能塞尔吉奥","双增能瓜迪奥拉","单增能瓜迪奥拉","单增能默特萨克","单增能范德法特","单增能多纳多尼","单增能罗马里奥","单增能阿隆索","单增能罗伯托", /* 其他97分球员 */],
+            96: ["史诗瓜迪奥拉","史诗吉文","史诗佩尔卡西"]
+        };
+
+        const currentPlayers = [
+            '姆巴佩', '哈兰德', '德布劳内', '本泽马', '莱万多夫斯基',
+            '范迪克', '萨拉赫', 'C罗', '梅西', '内马尔'
+        ];
+
+        let state = {
+            ability: 96,
+            baseProbability: 5,
+            probabilityStage: 0,
+            draws: 0,
+            abilityCount: 0,
+            probabilityCount: 0,
+            tearCount: 0,
+            cells: Array(9).fill(null),
+            opened: false
+        };
+
+        function initGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.onclick = () => drawCard(i);
+                grid.appendChild(cell);
+            }
+        }
+
+        function drawCard(index) {
+            if (state.opened || state.cells[index]) return;
+
+            let type;
+            // 处理强制撕开逻辑
+            if (state.draws >= 6 && state.tearCount < 2) {
+                type = 'tear';
+            } else {
+                const rand = Math.random() * 100;
+                type = rand < 25 ? 'prob-up' : rand < 65 ? 'ability-up' : 'tear';
+            }
+
+            state.cells[index] = type;
+            updateCell(index, type);
+            state.draws++;
+            
+            // 更新状态
+            if (type === 'ability-up') {
+                if (++state.abilityCount === 2) {
+                    state.ability++;
+                    state.abilityCount = 0;
+                }
+            } else if (type === 'prob-up') {
+                if (++state.probabilityCount === 2) {
+                    state.probabilityStage = Math.min(state.probabilityStage + 1, 3);
+                    state.probabilityCount = 0;
+                }
+            } else if (type === 'tear') {
+                if (++state.tearCount === 2) {
+                    openPack();
+                    return;
+                }
+            }
+
+            updateDisplay();
+            checkForcedTear();
+        }
+
+        function checkForcedTear() {
+            if (state.draws === 7 && state.tearCount === 0) {
+                [7,8].forEach(i => forceTear(i));
+            } else if (state.draws === 8 && state.tearCount === 1) {
+                forceTear(8);
+            }
+        }
+
+        function forceTear(index) {
+            if (!state.cells[index]) {
+                state.cells[index] = 'tear';
+                updateCell(index, 'tear');
+                state.draws++;
+                if (++state.tearCount === 2) openPack();
+            }
+        }
+
+        function openPack() {
+            state.opened = true;
+            const success = Math.random() * 100 < getCurrentProbability();
+            let player;
+
+            if (success) {
+                const target = state.ability >= 97 ? Math.min(state.ability, 101) : 97;
+                const pool = cardPool[target] || [];
+                player = pool[Math.floor(Math.random() * pool.length)] || '未知球员';
+                alert(`恭喜你，获得${player}！`);
+            } else {
+                player = currentPlayers[Math.floor(Math.random() * currentPlayers.length)];
+                alert(`很遗憾，你抽中了普卡（${player}）`);
+            }
+        }
+
+        function getCurrentProbability() {
+            const stages = [5, 10, 30, 100];
+            return stages[state.probabilityStage];
+        }
+
+        function updateCell(index, type) {
+            const cell = document.getElementById('grid').children[index];
+            cell.classList.add(type, 'disabled');
+            cell.innerHTML = type === 'prob-up' ? '概率提升' : 
+                          type === 'ability-up' ? '能力提升' : '撕开';
+        }
+
+        function updateDisplay() {
+            document.getElementById('ability').textContent = state.ability;
+            document.getElementById('probability').textContent = getCurrentProbability() + '%';
+            document.getElementById('draw-count').textContent = state.draws;
+        }
+
+        function resetGame() {
+            state = {
+                ability: 96,
+                baseProbability: 5,
+                probabilityStage: 0,
+                draws: 0,
+                abilityCount: 0,
+                probabilityCount: 0,
+                tearCount: 0,
+                cells: Array(9).fill(null),
+                opened: false
+            };
+            initGrid();
+            updateDisplay();
+        }
+
+        // 初始化游戏
+        initGrid();
+        updateDisplay();
+    </script>
+</body>
+</html>
